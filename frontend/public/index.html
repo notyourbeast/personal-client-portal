@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Freelance ClientHub</title>
+    <link rel="stylesheet" href="./assets/main.css" />
+  </head>
+  <body class="bg-brand-muted text-brand">
+    <div class="min-h-screen flex">
+      <aside class="w-64 bg-white shadow-lg p-6 hidden md:flex flex-col gap-4">
+        <div>
+          <p class="text-xs uppercase tracking-wide text-slate-500">Welcome</p>
+          <h1 class="text-2xl font-semibold">ClientHub</h1>
+        </div>
+        <nav class="flex flex-col gap-2 text-sm">
+          <a class="px-3 py-2 rounded-lg hover:bg-brand-muted" href="#">Dashboard</a>
+          <a class="px-3 py-2 rounded-lg hover:bg-brand-muted" href="clients.html">Clients</a>
+          <a class="px-3 py-2 rounded-lg hover:bg-brand-muted" href="#">Projects</a>
+          <a class="px-3 py-2 rounded-lg hover:bg-brand-muted" href="#">Time Tracking</a>
+          <a class="px-3 py-2 rounded-lg hover:bg-brand-muted" href="#">Invoices</a>
+          <a class="px-3 py-2 rounded-lg hover:bg-brand-muted" href="#">Settings</a>
+        </nav>
+      </aside>
+      <section class="flex-1 flex flex-col">
+        <header class="bg-white shadow px-6 py-4 flex items-center justify-between">
+          <div>
+            <p class="text-xs uppercase tracking-wide text-slate-500">Overview</p>
+            <h2 class="text-xl font-semibold">Freelance ClientHub</h2>
+          </div>
+          <button class="px-4 py-2 bg-brand-accent text-white rounded-lg">Log in</button>
+        </header>
+        <main class="flex-1 p-6 space-y-6">
+          <div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+            <article class="bg-white rounded-xl shadow p-4">
+              <p class="text-sm text-slate-500">Clients</p>
+              <p class="text-2xl font-semibold">0</p>
+            </article>
+            <article class="bg-white rounded-xl shadow p-4">
+              <p class="text-sm text-slate-500">Active Projects</p>
+              <p class="text-2xl font-semibold">0</p>
+            </article>
+            <article class="bg-white rounded-xl shadow p-4">
+              <p class="text-sm text-slate-500">Unpaid Invoices</p>
+              <p class="text-2xl font-semibold">0</p>
+            </article>
+            <article class="bg-white rounded-xl shadow p-4">
+              <p class="text-sm text-slate-500">Pending Amount</p>
+              <p class="text-2xl font-semibold">$0.00</p>
+            </article>
+          </div>
+          <section class="bg-white rounded-xl shadow p-6">
+            <div class="flex items-center justify-between mb-4">
+              <h3 class="text-lg font-semibold">Recent Activity</h3>
+              <button class="text-sm text-brand-accent">View all</button>
+            </div>
+            <p class="text-sm text-slate-500">Hook up API data to populate dashboard metrics.</p>
+          </section>
+        </main>
+      </section>
+    </div>
+  </body>
+</html>
