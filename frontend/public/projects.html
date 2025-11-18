@@ -27,40 +27,150 @@
           <div>
             <p class="text-xs uppercase tracking-wide text-slate-500">Project Management</p>
             <h2 class="text-xl font-semibold">Projects</h2>
+            <p class="text-sm text-slate-500">Track funnel health and keep delivery moving.</p>
           </div>
-          <button id="addProjectBtn" class="px-4 py-2 bg-brand-accent text-white rounded-lg hover:bg-blue-700 transition">
-            + Add Project
-          </button>
+          <div class="flex items-center gap-3">
+            <button id="refreshBoardBtn" class="px-4 py-2 border border-slate-200 text-sm rounded-lg hover:bg-brand-muted transition">
+              Refresh
+            </button>
+            <button id="addProjectBtn" class="px-4 py-2 bg-brand-accent text-white rounded-lg hover:bg-blue-700 transition">
+              + Add Project
+            </button>
+          </div>
         </header>
-        <main class="flex-1 p-6 overflow-x-auto">
-          <div id="kanbanBoard" class="flex gap-4 min-w-max">
+
+        <main class="flex-1 p-6 space-y-6 overflow-x-auto">
+          <section class="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+            <article class="bg-white rounded-xl shadow p-4">
+              <p class="text-xs uppercase tracking-wide text-slate-500">Total Projects</p>
+              <p class="text-3xl font-semibold mt-2" id="statTotalProjects">0</p>
+              <p class="text-xs text-slate-400 mt-1">All initiatives in the pipeline</p>
+            </article>
+            <article class="bg-white rounded-xl shadow p-4">
+              <p class="text-xs uppercase tracking-wide text-slate-500">Active Work</p>
+              <p class="text-3xl font-semibold mt-2" id="statActiveProjects">0</p>
+              <p class="text-xs text-slate-400 mt-1">Talks → Review stages</p>
+            </article>
+            <article class="bg-white rounded-xl shadow p-4">
+              <p class="text-xs uppercase tracking-wide text-slate-500">Due Soon</p>
+              <p class="text-3xl font-semibold mt-2" id="statDueSoon">0</p>
+              <p class="text-xs text-slate-400 mt-1">Deadlines within 7 days</p>
+            </article>
+            <article class="bg-white rounded-xl shadow p-4">
+              <p class="text-xs uppercase tracking-wide text-slate-500">Avg. Hourly Rate</p>
+              <p class="text-3xl font-semibold mt-2" id="statAverageRate">$0</p>
+              <p class="text-xs text-slate-400 mt-1">Across active projects</p>
+            </article>
+          </section>
+
+          <section class="bg-white rounded-xl shadow p-4 space-y-4">
+            <div class="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+              <div class="flex flex-col gap-3 md:flex-row md:items-center">
+                <div class="relative md:w-72">
+                  <span class="absolute inset-y-0 left-0 flex items-center pl-3 text-slate-400 pointer-events-none">🔍</span>
+                  <input
+                    id="searchProjects"
+                    type="text"
+                    placeholder="Search title or client..."
+                    class="w-full pl-10 pr-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-accent"
+                  />
+                </div>
+                <select
+                  id="boardClientFilter"
+                  class="w-full md:w-56 px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-accent"
+                >
+                  <option value="">All clients</option>
+                </select>
+              </div>
+              <div class="flex items-center gap-3">
+                <button id="clearFiltersBtn" class="px-3 py-2 text-sm border border-slate-200 rounded-lg hover:bg-brand-muted transition">
+                  Reset filters
+                </button>
+                <span class="text-xs text-slate-400 hidden md:inline-flex">
+                  Tip: Update stage via quick actions on each card.
+                </span>
+              </div>
+            </div>
+            <div class="flex flex-wrap gap-2" id="statusFilterChips">
+              <button class="px-3 py-1 text-xs rounded-full border border-slate-200 bg-white text-slate-600 shadow-sm status-chip active" data-status="idea">
+                Idea
+              </button>
+              <button class="px-3 py-1 text-xs rounded-full border border-slate-200 bg-white text-slate-600 shadow-sm status-chip active" data-status="talks">
+                Talks
+              </button>
+              <button class="px-3 py-1 text-xs rounded-full border border-slate-200 bg-white text-slate-600 shadow-sm status-chip active" data-status="in-progress">
+                In Progress
+              </button>
+              <button class="px-3 py-1 text-xs rounded-full border border-slate-200 bg-white text-slate-600 shadow-sm status-chip active" data-status="review">
+                Review
+              </button>
+              <button class="px-3 py-1 text-xs rounded-full border border-slate-200 bg-white text-slate-600 shadow-sm status-chip active" data-status="completed">
+                Completed
+              </button>
+            </div>
+          </section>
+
+          <div id="boardEmptyState" class="hidden bg-white rounded-xl shadow p-10 text-center">
+            <h3 class="text-xl font-semibold mb-2">No projects yet</h3>
+            <p class="text-slate-500 mb-4">Start by adding your first client project to visualize your funnel.</p>
+            <button class="px-4 py-2 bg-brand-accent text-white rounded-lg hover:bg-blue-700 transition" onclick="document.getElementById('addProjectBtn').click()">
+              Create project
+            </button>
+          </div>
+
+          <div id="kanbanBoard" class="flex gap-4 min-w-max relative">
+            <div id="boardLoadingOverlay" class="hidden absolute inset-0 bg-white/70 backdrop-blur-sm rounded-xl z-10">
+              <div class="h-full w-full flex items-center justify-center">
+                <div class="animate-spin rounded-full h-12 w-12 border-4 border-brand-accent border-t-transparent"></div>
+              </div>
+            </div>
             <div class="kanban-column" data-status="idea">
               <div class="bg-white rounded-xl shadow p-4 min-w-[280px]">
-                <h3 class="font-semibold text-sm uppercase tracking-wide text-slate-600 mb-4">Idea</h3>
+                <div class="flex items-center justify-between mb-2">
+                  <h3 class="font-semibold text-sm uppercase tracking-wide text-slate-600">Idea</h3>
+                  <span class="text-xs bg-brand-muted px-2 py-1 rounded-full text-slate-600" data-column-count="idea">0</span>
+                </div>
+                <p class="text-xs text-slate-400 mb-4">Lead intake & discovery thoughts.</p>
                 <div class="space-y-3" id="column-idea"></div>
               </div>
             </div>
             <div class="kanban-column" data-status="talks">
               <div class="bg-white rounded-xl shadow p-4 min-w-[280px]">
-                <h3 class="font-semibold text-sm uppercase tracking-wide text-slate-600 mb-4">Talks</h3>
+                <div class="flex items-center justify-between mb-2">
+                  <h3 class="font-semibold text-sm uppercase tracking-wide text-slate-600">Talks</h3>
+                  <span class="text-xs bg-brand-muted px-2 py-1 rounded-full text-slate-600" data-column-count="talks">0</span>
+                </div>
+                <p class="text-xs text-slate-400 mb-4">Scoping calls & proposal drafting.</p>
                 <div class="space-y-3" id="column-talks"></div>
               </div>
             </div>
             <div class="kanban-column" data-status="in-progress">
               <div class="bg-white rounded-xl shadow p-4 min-w-[280px]">
-                <h3 class="font-semibold text-sm uppercase tracking-wide text-slate-600 mb-4">In Progress</h3>
+                <div class="flex items-center justify-between mb-2">
+                  <h3 class="font-semibold text-sm uppercase tracking-wide text-slate-600">In Progress</h3>
+                  <span class="text-xs bg-brand-muted px-2 py-1 rounded-full text-slate-600" data-column-count="in-progress">0</span>
+                </div>
+                <p class="text-xs text-slate-400 mb-4">Execution & time tracking.</p>
                 <div class="space-y-3" id="column-in-progress"></div>
               </div>
             </div>
             <div class="kanban-column" data-status="review">
               <div class="bg-white rounded-xl shadow p-4 min-w-[280px]">
-                <h3 class="font-semibold text-sm uppercase tracking-wide text-slate-600 mb-4">Review</h3>
+                <div class="flex items-center justify-between mb-2">
+                  <h3 class="font-semibold text-sm uppercase tracking-wide text-slate-600">Review</h3>
+                  <span class="text-xs bg-brand-muted px-2 py-1 rounded-full text-slate-600" data-column-count="review">0</span>
+                </div>
+                <p class="text-xs text-slate-400 mb-4">Client feedback & revisions.</p>
                 <div class="space-y-3" id="column-review"></div>
               </div>
             </div>
             <div class="kanban-column" data-status="completed">
               <div class="bg-white rounded-xl shadow p-4 min-w-[280px]">
-                <h3 class="font-semibold text-sm uppercase tracking-wide text-slate-600 mb-4">Completed</h3>
+                <div class="flex items-center justify-between mb-2">
+                  <h3 class="font-semibold text-sm uppercase tracking-wide text-slate-600">Completed</h3>
+                  <span class="text-xs bg-brand-muted px-2 py-1 rounded-full text-slate-600" data-column-count="completed">0</span>
+                </div>
+                <p class="text-xs text-slate-400 mb-4">Delivery sent & invoiced.</p>
                 <div class="space-y-3" id="column-completed"></div>
               </div>
             </div>
@@ -137,17 +247,10 @@
             />
           </div>
           <div class="flex gap-3 pt-2">
-            <button
-              type="submit"
-              class="flex-1 px-4 py-2 bg-brand-accent text-white rounded-lg hover:bg-blue-700 transition"
-            >
+            <button type="submit" class="flex-1 px-4 py-2 bg-brand-accent text-white rounded-lg hover:bg-blue-700 transition">
               Save
             </button>
-            <button
-              type="button"
-              id="cancelBtn"
-              class="flex-1 px-4 py-2 bg-slate-200 text-slate-700 rounded-lg hover:bg-slate-300 transition"
-            >
+            <button type="button" id="cancelBtn" class="flex-1 px-4 py-2 bg-slate-200 text-slate-700 rounded-lg hover:bg-slate-300 transition">
               Cancel
             </button>
           </div>
@@ -155,7 +258,8 @@
       </div>
     </div>
 
+    <div id="projectToast" class="hidden fixed bottom-6 right-6 bg-white border border-slate-200 shadow-xl rounded-xl px-4 py-3 text-sm text-slate-700"></div>
+
     <script src="./assets/projects.js"></script>
   </body>
 </html>
-

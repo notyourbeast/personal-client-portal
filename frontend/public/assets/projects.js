@@ -1,8 +1,5 @@
 const API_BASE = "http://localhost:8000/api";
-
-let projects = [];
-let clients = [];
-
+const STATUS_ORDER = ["idea", "talks", "in-progress", "review", "completed"];
 const STATUS_LABELS = {
   idea: "Idea",
   talks: "Talks",
@@ -10,12 +7,50 @@ const STATUS_LABELS = {
   review: "Review",
   completed: "Completed",
 };
+let projects = [];
+let clients = [];
+let toastEl;
+let filters = {
+  search: "",
+  clientId: "",
+  statuses: new Set(STATUS_ORDER),
+};
+let searchDebounce;
+
+async function checkAuth() {
+  try {
+    const response = await fetch(`${API_BASE}/auth/me`, { credentials: "include" });
+    if (!response.ok) throw new Error("Not authenticated");
+    return true;
+  } catch (error) {
+    window.location.href = "login.html";
+    return false;
+  }
+}
+
+function setBoardLoading(isLoading) {
+  const overlay = document.getElementById("boardLoadingOverlay");
+  if (!overlay) return;
+  overlay.classList.toggle("hidden", !isLoading);
+}
+
+function showToast(message, type = "success") {
+  if (!toastEl) return;
+  toastEl.textContent = message;
+  toastEl.classList.remove("hidden", "text-red-700", "border-red-200", "bg-red-50");
+  toastEl.classList.remove("text-emerald-700", "border-emerald-200", "bg-emerald-50");
+  if (type === "error") {
+    toastEl.classList.add("text-red-700", "border-red-200", "bg-red-50");
+  } else {
+    toastEl.classList.add("text-emerald-700", "border-emerald-200", "bg-emerald-50");
+  }
+  toastEl.classList.add("visible");
+  setTimeout(() => toastEl.classList.add("hidden"), 2500);
+}
 
 async function fetchClients() {
   try {
-    const response = await fetch(`${API_BASE}/clients`, {
-      credentials: "include",
-    });
+    const response = await fetch(`${API_BASE}/clients`, { credentials: "include" });
     if (!response.ok) {
       if (response.status === 401) {
         window.location.href = "login.html";
@@ -24,32 +59,43 @@ async function fetchClients() {
       throw new Error(`HTTP ${response.status}`);
     }
     clients = await response.json();
-    populateClientSelect();
+    populateClientSelects();
   } catch (error) {
     console.error("Failed to fetch clients:", error);
   }
 }
 
-function populateClientSelect() {
-  const select = document.getElementById("projectClientId");
-  const currentValue = select.value;
-  select.innerHTML = '<option value="">Select a client...</option>';
-  clients.forEach((client) => {
-    const option = document.createElement("option");
-    option.value = client.id;
-    option.textContent = client.name;
-    select.appendChild(option);
-  });
-  if (currentValue) {
-    select.value = currentValue;
+function populateClientSelects() {
+  const projectSelect = document.getElementById("projectClientId");
+  const filterSelect = document.getElementById("boardClientFilter");
+  if (projectSelect) {
+    const current = projectSelect.value;
+    projectSelect.innerHTML = '<option value="">Select a client...</option>';
+    clients.forEach((client) => {
+      const option = document.createElement("option");
+      option.value = client.id;
+      option.textContent = client.name;
+      projectSelect.appendChild(option);
+    });
+    if (current) projectSelect.value = current;
+  }
+  if (filterSelect) {
+    const currentFilter = filters.clientId;
+    filterSelect.innerHTML = '<option value="">All clients</option>';
+    clients.forEach((client) => {
+      const option = document.createElement("option");
+      option.value = client.id;
+      option.textContent = client.name;
+      filterSelect.appendChild(option);
+    });
+    filterSelect.value = currentFilter;
   }
 }
 
 async function fetchProjects() {
+  setBoardLoading(true);
   try {
-    const response = await fetch(`${API_BASE}/projects`, {
-      credentials: "include",
-    });
+    const response = await fetch(`${API_BASE}/projects`, { credentials: "include" });
     if (!response.ok) {
       if (response.status === 401) {
         window.location.href = "login.html";
@@ -58,61 +104,114 @@ async function fetchProjects() {
       throw new Error(`HTTP ${response.status}`);
     }
     projects = await response.json();
+    renderStats();
     renderKanban();
   } catch (error) {
     console.error("Failed to fetch projects:", error);
+    showToast("Failed to load projects", "error");
+  } finally {
+    setBoardLoading(false);
   }
 }
 
+function applyFilters(list) {
+  return list.filter((project) => {
+    if (!filters.statuses.has(project.status)) return false;
+    if (filters.clientId && project.client_id !== filters.clientId) return false;
+    if (filters.search) {
+      const target = `${project.title} ${project.description || ""} ${getClientName(project.client_id)}`.toLowerCase();
+      if (!target.includes(filters.search.toLowerCase())) return false;
+    }
+    return true;
+  });
+}
+
+function renderStats() {
+  const total = projects.length;
+  const active = projects.filter((p) => ["talks", "in-progress", "review"].includes(p.status)).length;
+  const dueSoon = projects.filter((p) => {
+    if (!p.deadline) return false;
+    const deadline = new Date(p.deadline);
+    const now = new Date();
+    const diffDays = (deadline - now) / (1000 * 60 * 60 * 24);
+    return diffDays >= 0 && diffDays <= 7 && p.status !== "completed";
+  }).length;
+  const activeRates = projects.filter((p) => p.hourly_rate && p.status !== "completed");
+  const avgRate = activeRates.length
+    ? activeRates.reduce((sum, p) => sum + (p.hourly_rate || 0), 0) / activeRates.length
+    : 0;
+
+  document.getElementById("statTotalProjects").textContent = total;
+  document.getElementById("statActiveProjects").textContent = active;
+  document.getElementById("statDueSoon").textContent = dueSoon;
+  document.getElementById("statAverageRate").textContent = `$${avgRate.toFixed(0)}`;
+}
+
 function renderKanban() {
-  const columns = ["idea", "talks", "in-progress", "review", "completed"];
-  columns.forEach((status) => {
+  const filteredProjects = applyFilters(projects);
+  const emptyState = document.getElementById("boardEmptyState");
+  emptyState.classList.toggle("hidden", filteredProjects.length > 0);
+
+  STATUS_ORDER.forEach((status) => {
     const column = document.getElementById(`column-${status}`);
-    const statusProjects = projects.filter((p) => p.status === status);
+    const countEl = document.querySelector(`[data-column-count="${status}"]`);
+    const statusProjects = filteredProjects.filter((p) => p.status === status);
+    if (countEl) countEl.textContent = statusProjects.length;
     if (statusProjects.length === 0) {
       column.innerHTML = '<p class="text-sm text-slate-400 text-center py-4">No projects</p>';
       return;
     }
     column.innerHTML = statusProjects
-      .map((project) => {
-        const client = clients.find((c) => c.id === project.client_id);
-        const deadline = project.deadline ? new Date(project.deadline).toLocaleDateString() : null;
-        const rate = project.hourly_rate ? `$${project.hourly_rate}/hr` : "—";
-        return `
-      <div class="bg-brand-muted rounded-lg p-3 border border-slate-200 hover:shadow-md transition cursor-pointer" data-project-id="${project.id}">
-        <div class="flex items-start justify-between mb-2">
-          <h4 class="font-semibold text-sm">${escapeHtml(project.title)}</h4>
-          <button onclick="deleteProject('${project.id}')" class="text-red-600 hover:text-red-800 text-xs">✕</button>
-        </div>
-        ${client ? `<p class="text-xs text-slate-600 mb-1">${escapeHtml(client.name)}</p>` : ""}
-        ${project.description ? `<p class="text-xs text-slate-500 mb-2 line-clamp-2">${escapeHtml(project.description)}</p>` : ""}
-        <div class="flex items-center justify-between text-xs text-slate-600 mb-2">
-          <span>${rate}</span>
-          ${deadline ? `<span>Due: ${deadline}</span>` : ""}
-        </div>
-        <div class="flex flex-wrap gap-1">
-          ${columns
-            .filter((s) => s !== status)
-            .map(
-              (s) => `
-            <button
-              onclick="updateStatus('${project.id}', '${s}')"
-              class="px-2 py-1 text-xs bg-white border border-slate-300 rounded hover:bg-slate-50 transition"
-            >
-              → ${STATUS_LABELS[s]}
-            </button>
-          `
-            )
-            .join("")}
-        </div>
-        <button onclick="editProject('${project.id}')" class="mt-2 text-xs text-brand-accent hover:underline w-full text-left">
-          Edit
-        </button>
-      </div>
-    `;
-      })
+      .map((project) => renderCard(project))
       .join("");
   });
+}
+
+function renderCard(project) {
+  const clientName = getClientName(project.client_id);
+  const deadline = project.deadline ? new Date(project.deadline) : null;
+  const deadlineLabel = deadline ? deadline.toLocaleDateString() : null;
+  const rate = project.hourly_rate ? `$${project.hourly_rate}/hr` : "—";
+  const overdue = deadline ? deadline < new Date() && project.status !== "completed" : false;
+
+  return `
+    <div class="bg-brand-muted rounded-lg p-4 border border-slate-200 hover:border-brand-accent/50 hover:shadow-md transition">
+      <div class="flex items-start justify-between gap-2">
+        <div>
+          <h4 class="font-semibold text-sm leading-snug">${escapeHtml(project.title)}</h4>
+          ${clientName ? `<p class="text-xs text-slate-500">${escapeHtml(clientName)}</p>` : ""}
+        </div>
+        <button onclick="deleteProject('${project.id}')" class="text-red-500 hover:text-red-600 text-xs">✕</button>
+      </div>
+      ${project.description ? `<p class="text-xs text-slate-500 mt-2 line-clamp-3">${escapeHtml(project.description)}</p>` : ""}
+      <div class="flex items-center justify-between text-xs text-slate-600 mt-3">
+        <span>${rate}</span>
+        ${deadlineLabel ? `<span class="${overdue ? "text-red-500" : ""}">Due ${deadlineLabel}</span>` : ""}
+      </div>
+      <div class="mt-3 flex flex-wrap gap-1">
+        ${STATUS_ORDER.filter((s) => s !== project.status)
+          .map(
+            (status) => `
+              <button
+                onclick="updateStatus('${project.id}', '${status}')"
+                class="px-2 py-1 text-[11px] border border-slate-200 rounded-full bg-white hover:bg-brand-muted"
+              >
+                ${STATUS_LABELS[status]}
+              </button>
+            `
+          )
+          .join("")}
+      </div>
+      <button onclick="editProject('${project.id}')" class="mt-3 text-xs text-brand-accent hover:underline">
+        Edit details
+      </button>
+    </div>
+  `;
+}
+
+function getClientName(clientId) {
+  const client = clients.find((c) => c.id === clientId);
+  return client ? client.name : "";
 }
 
 function escapeHtml(text) {
@@ -129,7 +228,7 @@ function openModal(project = null) {
   modal.classList.remove("hidden");
   form.reset();
   document.getElementById("projectId").value = "";
-  populateClientSelect();
+  populateClientSelects();
   if (project) {
     title.textContent = "Edit Project";
     document.getElementById("projectId").value = project.id;
@@ -168,6 +267,7 @@ async function saveProject(e) {
       : null,
     deadline: deadlineInput ? new Date(deadlineInput).toISOString() : null,
   };
+
   try {
     const url = id ? `${API_BASE}/projects/${id}` : `${API_BASE}/projects`;
     const method = id ? "PUT" : "POST";
@@ -183,22 +283,20 @@ async function saveProject(e) {
         return;
       }
       const error = await response.json().catch(() => ({ detail: "Failed to save project" }));
-      alert(error.detail || "Failed to save project");
-      return;
+      throw new Error(error.detail || "Failed to save project");
     }
     closeModal();
+    showToast(id ? "Project updated" : "Project created");
     await fetchProjects();
   } catch (error) {
     console.error("Failed to save project:", error);
-    alert("Failed to save project. Please try again.");
+    showToast(error.message || "Failed to save project", "error");
   }
 }
 
 async function editProject(id) {
   const project = projects.find((p) => p.id === id);
-  if (project) {
-    openModal(project);
-  }
+  if (project) openModal(project);
 }
 
 async function updateStatus(projectId, newStatus) {
@@ -216,10 +314,11 @@ async function updateStatus(projectId, newStatus) {
       }
       throw new Error(`HTTP ${response.status}`);
     }
+    showToast(`Moved to ${STATUS_LABELS[newStatus]}`);
     await fetchProjects();
   } catch (error) {
     console.error("Failed to update status:", error);
-    alert("Failed to update project status. Please try again.");
+    showToast("Failed to update project status", "error");
   }
 }
 
@@ -237,19 +336,85 @@ async function deleteProject(id) {
       }
       throw new Error(`HTTP ${response.status}`);
     }
+    showToast("Project deleted");
     await fetchProjects();
   } catch (error) {
     console.error("Failed to delete project:", error);
-    alert("Failed to delete project. Please try again.");
+    showToast("Failed to delete project", "error");
   }
 }
 
-document.addEventListener("DOMContentLoaded", () => {
+function attachFilters() {
+  const searchInput = document.getElementById("searchProjects");
+  const clientFilter = document.getElementById("boardClientFilter");
+  const clearBtn = document.getElementById("clearFiltersBtn");
+  const chips = document.querySelectorAll("#statusFilterChips button");
+
+  chips.forEach((chip) => {
+    if (chip.classList.contains("active")) {
+      chip.classList.add("bg-brand-accent", "text-white");
+      chip.classList.remove("bg-white", "text-slate-600");
+    }
+  });
+
+  searchInput.addEventListener("input", (event) => {
+    clearTimeout(searchDebounce);
+    searchDebounce = setTimeout(() => {
+      filters.search = event.target.value.trim();
+      renderKanban();
+    }, 250);
+  });
+
+  clientFilter.addEventListener("change", (event) => {
+    filters.clientId = event.target.value;
+    renderKanban();
+  });
+
+  clearBtn.addEventListener("click", () => {
+    filters = { search: "", clientId: "", statuses: new Set(STATUS_ORDER) };
+    searchInput.value = "";
+    clientFilter.value = "";
+    chips.forEach((chip) => chip.classList.add("active"));
+    renderKanban();
+  });
+
+  chips.forEach((chip) => {
+    chip.addEventListener("click", () => {
+      const status = chip.dataset.status;
+      if (filters.statuses.has(status) && filters.statuses.size === 1) return;
+      if (filters.statuses.has(status)) {
+        filters.statuses.delete(status);
+        chip.classList.remove("active", "bg-brand-accent", "text-white");
+        chip.classList.add("bg-white", "text-slate-600");
+      } else {
+        filters.statuses.add(status);
+        chip.classList.add("active", "bg-brand-accent", "text-white");
+        chip.classList.remove("bg-white", "text-slate-600");
+      }
+      renderKanban();
+    });
+  });
+}
+
+function bindModalControls() {
   document.getElementById("addProjectBtn").addEventListener("click", () => openModal());
   document.getElementById("closeModalBtn").addEventListener("click", closeModal);
   document.getElementById("cancelBtn").addEventListener("click", closeModal);
   document.getElementById("projectForm").addEventListener("submit", saveProject);
-  fetchClients();
+}
+
+function bindActions() {
+  document.getElementById("refreshBoardBtn").addEventListener("click", fetchProjects);
+}
+
+document.addEventListener("DOMContentLoaded", async () => {
+  toastEl = document.getElementById("projectToast");
+  const authed = await checkAuth();
+  if (!authed) return;
+
+  await fetchClients();
+  attachFilters();
+  bindModalControls();
+  bindActions();
   fetchProjects();
 });
-
