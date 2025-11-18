@@ -12,7 +12,13 @@ _client: AsyncIOMotorClient | None = None
 def get_client() -> AsyncIOMotorClient:
     global _client
     if _client is None:
-        _client = AsyncIOMotorClient(_settings.mongo_uri)
+        try:
+            _client = AsyncIOMotorClient(_settings.mongo_uri, serverSelectionTimeoutMS=5000)
+        except Exception as e:
+            raise ConnectionError(
+                f"Failed to connect to MongoDB at {_settings.mongo_uri}. "
+                f"Please check your MONGO_URI in .env file. Error: {e}"
+            ) from e
     return _client
 
 

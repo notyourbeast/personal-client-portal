@@ -11,7 +11,7 @@ async function fetchClients(search = null) {
     });
     if (!response.ok) {
       if (response.status === 401) {
-        window.location.href = "index.html";
+        window.location.href = "login.html";
         return;
       }
       throw new Error(`HTTP ${response.status}`);
@@ -101,11 +101,22 @@ async function saveClient(e) {
     });
     if (!response.ok) {
       if (response.status === 401) {
+        alert("Please log in first");
         window.location.href = "index.html";
         return;
       }
-      const error = await response.json().catch(() => ({ detail: "Failed to save client" }));
-      alert(error.detail || "Failed to save client");
+      let errorMessage = "Failed to save client";
+      try {
+        const error = await response.json();
+        errorMessage = error.detail || error.message || JSON.stringify(error);
+        if (Array.isArray(error.detail)) {
+          errorMessage = error.detail.map((e) => `${e.loc?.join(".")}: ${e.msg}`).join(", ");
+        }
+      } catch (e) {
+        errorMessage = `HTTP ${response.status}: ${response.statusText}`;
+      }
+      console.error("Save error:", errorMessage);
+      alert(errorMessage);
       return;
     }
     closeModal();
@@ -132,7 +143,7 @@ async function deleteClient(id) {
     });
     if (!response.ok) {
       if (response.status === 401) {
-        window.location.href = "index.html";
+        window.location.href = "login.html";
         return;
       }
       throw new Error(`HTTP ${response.status}`);
@@ -144,7 +155,29 @@ async function deleteClient(id) {
   }
 }
 
-document.addEventListener("DOMContentLoaded", () => {
+async function checkAuth() {
+  try {
+    const response = await fetch(`${API_BASE}/auth/me`, {
+      credentials: "include",
+    });
+    if (!response.ok) {
+      if (response.status === 401) {
+        window.location.href = "login.html";
+        return false;
+      }
+    }
+    return true;
+  } catch (error) {
+    console.error("Auth check failed:", error);
+    window.location.href = "login.html";
+    return false;
+  }
+}
+
+document.addEventListener("DOMContentLoaded", async () => {
+  const isAuthenticated = await checkAuth();
+  if (!isAuthenticated) return;
+
   document.getElementById("addClientBtn").addEventListener("click", () => openModal());
   document.getElementById("closeModalBtn").addEventListener("click", closeModal);
   document.getElementById("cancelBtn").addEventListener("click", closeModal);
