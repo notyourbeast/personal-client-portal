@@ -3,4 +3,7 @@ A web-based tool called the Personal Client Portal allows independent contractor
 
 
 Replaced Github Link : https://github.com/notyourbeast/Client-Ops-Desk.git
-Deployed Site Link : https://client-ops-desk.onrender.com
+
+The Updated code Repo : https://github.com/notyourbeast/ClientHub.git  (the code was updated and push directly because all the commits were deleted due to a mistake of git force while fixing branch issues) 
+
+The Render Deployment link : https://client-ops-desk.onrender.com
